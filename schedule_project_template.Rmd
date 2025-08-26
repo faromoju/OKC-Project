@@ -1,0 +1,292 @@
+---
+title: 'Data Science Project'
+output: html_document
+author: "Oluwatobi Faromoju"
+date: "`r format(Sys.Date(), '%m/%d/%y')`"
+---
+
+```{r set options, include=FALSE}
+# DO NOT CHANGE THE LINE BELOW 
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+``` {css styling, echo=FALSE}
+
+<style>
+.tocify {
+max-width: 175px !important;
+}
+</style>
+
+<style>
+.main-container {
+width: 100%;
+max-width: 940px;
+margin-left: 250px;
+margin-right: auto;
+}
+</style>
+
+<style>
+.red-header {
+  color: red;
+}
+</style>
+
+```
+
+```{r logo, echo = FALSE}
+
+htmltools::img(src = 'https://cdn.nba.com/logos/nba/1610612760/primary/L/logo.svg',
+                height = '250px',
+                alt = 'logo',
+                style = 'position: fixed; top: -40px; left: 5px;')
+```
+
+
+# Introduction  
+
+The purpose of this project is to gauge your technical skills and problem solving ability by working through something similar to a real NBA data science project. You will work your way through this R Markdown document, answering questions as you go along. Please begin by adding your name to the "author" key in the YAML header. When you're finished with the document, come back and type your answers into the answer key at the top. Please leave all your work below and have your answers where indicated below as well. Please note that we will be reviewing your code so make it clear, concise, and **avoid long printouts.** Feel free to add in as many new code chunks as you'd like.
+
+Remember that we will be grading the quality of your code and visuals alongside the correctness of your answers. Please try to use the tidyverse as much as possible (instead of base R and explicit loops). Please do not bring in any outside data, and use the provided data as truth (for example, some "home" games have been played at secondary locations, including TOR's entire 2020-21 season. These are not reflected in the data and you do not need to account for this.) Note that the OKC and DEN 2024-25 schedules in `schedule_24_partial.csv` intentionally include only 80 games, as the league holds 2 games out for each team in the middle of December due to unknown NBA Cup matchups. Do not assign specific games to fill those two slots.      
+
+**Note:**    
+
+**Throughout this document, any `season` column represents the year each season started. For example, the 2015-16 season will be in the dataset as 2015. We may refer to a season by just this number (e.g. 2015) instead of the full text (e.g. 2015-16).**   
+
+<h1 class="red-header">Answers</h1>  
+
+## Part 1      
+
+**Question 1:** 57 4-in-6 stretches in OKC's draft schedule.   
+
+**Question 2:** 52.8 4-in-6 stretches on average.  
+
+**Question 3:**    
+
+- Most 4-in-6 stretches on average: TEAM1 (XX.X)    
+- Fewest 4-in-6 stretches on average: TEAM2 (XX.X)       
+
+**Question 4:** This is a written question. Please leave your response in the document under Question 4.          
+
+**Question 5:**   
+
+- BKN Defensive eFG%: XX.X%   
+- When opponent on a B2B: XX.X%    
+
+## Part 2  
+
+Please show your work in the document, you don't need anything here.     
+
+## Part 3    
+ 
+**Question 8:**    
+
+- Most Helped by Schedule: TEAM1 (XX.X wins)     
+- Most Hurt by Schedule: TEAM2 (XX.X wins)     
+
+# Setup and Data    
+
+```{r load data, message = F, warning = F}
+library(tidyverse)
+# Note, you will likely have to change these paths. If your data is in the same folder as this project,
+# the paths will likely be fixed for you by deleting ../../Data/schedule_project/ from each string.
+schedule <- read_csv("schedule.csv")
+draft_schedule <- read_csv("schedule_24_partial.csv")
+locations <- read_csv("locations.csv")
+game_data <- read_csv("team_game_data.csv")
+```
+
+## Part 1 -- Schedule Analysis               
+
+In this section, you're going to work to answer questions using NBA scheduling data.   
+
+### Question 1  
+
+**QUESTION:** How many times are the Thunder scheduled to play 4 games in 6 nights in the provided 80-game draft of the 2024-25 season schedule? (Note: clarification, the stretches can overlap, the question is really “How many games are the 4th game played over the past 6 nights?”)     
+  
+
+```{r}
+# View Partial Schedule column names and quick overview of key statistical measures
+summary(draft_schedule)
+
+# Summary of Partial Schedule column data structure and a few sample rows
+str(draft_schedule)
+```
+
+```{r}
+# Algorithm to calculate if 4th game is played within 6 nights
+
+# Filter out OKC rows from the dataset and sort by gamedate
+OKC_Rows <- filter(draft_schedule, team == "OKC") %>% arrange(gamedate)
+
+# Calculate days between every fourth game
+daysBetweenFourthGame <- sapply(1:(nrow(OKC_Rows) - 3), function(i) {
+    date1 <- as.Date(OKC_Rows$gamedate[i])
+    date4 <- as.Date(OKC_Rows$gamedate[i + 3])
+    return(as.numeric(date4 - date1))
+})
+
+# Get total number of fourth games that occur within 6 nights
+gamesCount <- sum(daysBetweenFourthGame <= 6)
+
+cat("OKC had", gamesCount, "4-in-6 stretches in the 2024-25 season schedule")
+```
+
+<span style="color:red">**ANSWER 1:**</span>  
+
+57 4-in-6 stretches in OKC's draft schedule.   
+
+### Question 2     
+
+**QUESTION:** From 2014-15 to 2023-24, what is the average number of 4-in-6 stretches for a team in a season? Adjust each team/season to per-82 games before taking your final average.   
+  
+
+```{r}
+# View Larger Schedule column names and quick overview of key statistical measures
+summary(schedule)
+
+# Summary of Larger Schedule column data structure and a few sample rows
+str(schedule)
+```
+
+```{r}
+library(purrr)
+
+# Group by team and season
+sorted_schedule <- arrange(schedule, gamedate) %>%
+  group_by(team, season) %>%
+  group_split()
+
+# Count total games per team-season
+game_counts <- arrange(schedule, gamedate) %>%
+  group_by(team, season) %>%
+  summarise(total_games = n(), .groups = "drop")
+
+# Apply your logic to each group
+eachTeamAndSeason <- map(sorted_schedule, function(df) {
+
+  # Calculate days between game i and game i+3
+  days <- sapply(1:(nrow(df) - 3), function(i) {
+    date1 <- as.Date(df$gamedate[i])
+    date4 <- as.Date(df$gamedate[i + 3])
+    as.numeric(date4 - date1)
+  })
+
+  # Return a data frame with team, season, and the result
+  tibble(
+    team = unique(df$team),
+    season = unique(df$season),
+    daysBetweenFourthGameLargerSchedule = days
+  )
+})
+
+# Combine all results into one data frame
+final_result <- bind_rows(eachTeamAndSeason)
+
+# Count 4-in-6 stretches per team-season
+stretch_counts <- final_result %>%
+  filter(daysBetweenFourthGameLargerSchedule <= 6) %>%
+  count(team, season, name = "four_in_six_count")
+
+# Merge and normalize
+normalized_stretches <- stretch_counts %>%
+  left_join(game_counts, by = c("team", "season")) %>%
+  mutate(
+    normalized_count = round((four_in_six_count / total_games) * 82, 2)
+  )
+
+# Get total number of fourth games that occur within 6 nights
+gamesCountLargerSchedule <- mean(normalized_stretches$normalized_count)
+```
+<span style="color:red">**ANSWER 2:**</span>  
+
+52.8 4-in-6 stretches on average.  
+
+### Question 3  
+
+**QUESTION:** Which of the 30 NBA teams has had the highest average number of 4-in-6 stretches between 2014-15 and 2023-24? Which team has had the lowest average? Adjust each team/season to per-82 games.     
+
+
+```{r}
+
+```
+
+<span style="color:red">**ANSWER 3:**</span>  
+
+- Most 4-in-6 stretches on average: TEAM1 (XX.X)     
+- Fewest 4-in-6 stretches on average: TEAM2 (XX.X)        
+
+
+### Question 4  
+
+**QUESTION:** Is the difference between most and least from Q3 surprising, or do you expect that size difference is likely to be the result of chance?    
+
+<span style="color:red">**ANSWER 4:**</span>    
+
+
+### Question 5   
+
+**QUESTION:** What was BKN's defensive eFG% in the 2023-24 season? What was their defensive eFG% that season in situations where their opponent was on the second night of back-to-back?  
+
+<span style="color:red">**ANSWER 5:**</span>    
+
+- BKN Defensive eFG%: XX.X%   
+- When opponent on a B2B: XX.X%    
+
+## Part 2 -- Trends and Visualizations                   
+
+
+
+This is an intentionally open ended section, and there are multiple approaches you could take to have a successful project. Feel free to be creative. However, for this section, please consider only the density of games and travel schedule, not the relative on-court strength of different teams.    
+
+### Question 6   
+
+**QUESTION:** Please identify at least 2 trends in scheduling over time. In other words, how are the more recent schedules different from the schedules of the past? Please include a visual (plot or styled table) highlighting or explaining each trend and include a brief written description of your findings.  
+
+
+<span style="color:red">**ANSWER 6:**</span>    
+
+```{r}
+
+```
+
+
+### Question 7    
+
+**QUESTION:** Please design a plotting tool to help visualize a team’s schedule for a season. The plot should cover the whole season and should help the viewer contextualize and understand a team’s schedule, potentially highlighting periods of excessive travel, dense blocks of games, or other schedule anomalies. If you can, making the plots interactive (for example through the plotly package) is a bonus.   
+
+Please use this tool to plot OKC and DEN's provided 80-game 2024-25 schedules.   
+
+<span style="color:red">**ANSWER 7:**</span>    
+
+### Question 8    
+
+**QUESTION:** Using your tool, what is the best and worst part of OKC’s 2024-25 draft schedule? Please give your answer as a short brief to members of the front office and coaching staff to set expectations going into the season. You can include context from past schedules.  
+
+<span style="color:red">**ANSWER 8:**</span>    
+
+## Part 3 -- Modeling     
+
+### Question 9   
+
+**QUESTION:** Please estimate how many more/fewer regular season wins each team has had due to schedule-related factors from 2019-20 though 2023-24. Your final answer should have one number for each team, representing the total number of wins (not per 82, and not a per-season average). You may consider the on-court strength of the scheduled opponents as well as the impact of travel/schedule density. Please include the teams and estimates for the most helped and most hurt in the answer key.    
+
+If you fit a model to help answer this question, please write a paragraph explaining your model, and include a simple model diagnostic (eg a printed summary of a regression, a variable importance plot, etc).    
+
+```{r}
+
+```
+
+
+<span style="color:red">**ANSWER 9:**</span>    
+
+- Most Helped by Schedule: TEAM1 (XX.X wins)     
+- Most Hurt by Schedule: TEAM2 (XX.X wins)     
+
+
+
+
+
+
+
