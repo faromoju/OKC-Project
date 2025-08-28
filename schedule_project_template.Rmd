@@ -127,8 +127,15 @@ daysBetweenFourthGame <- sapply(1:(nrow(OKC_Rows) - 3), function(i) {
     return(as.numeric(date4 - date1))
 })
 
+newOKCRows <- tibble(
+  season = head(OKC_Rows$season, -3),
+  gamedate = head(OKC_Rows$gamedate, -3),
+  team = head(OKC_Rows$team, -3),
+  daysBetweenFourGames = daysBetweenFourthGame
+)
+
 # Get total number of fourth games that occur within 6 nights
-gamesCount <- sum(daysBetweenFourthGame <= 6)
+gamesCount <- sum(daysBetweenFourthGame <= 5)
 
 cat("OKC had", gamesCount, "4-in-6 stretches in the 2024-25 season schedule")
 ```
