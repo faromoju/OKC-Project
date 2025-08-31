@@ -58,21 +58,21 @@ Remember that we will be grading the quality of your code and visuals alongside 
 
 ## Part 1      
 
-**Question 1:** 57 4-in-6 stretches in OKC's draft schedule.   
+**Question 1:** 26 4-in-6 stretches in OKC's draft schedule.   
 
-**Question 2:** 52.8 4-in-6 stretches on average.  
+**Question 2:** 25.1 4-in-6 stretches on average.  
 
 **Question 3:**    
 
-- Most 4-in-6 stretches on average: TEAM1 (XX.X)    
-- Fewest 4-in-6 stretches on average: TEAM2 (XX.X)       
+- Most 4-in-6 stretches on average: CHA (28.1)    
+- Fewest 4-in-6 stretches on average: NYK (22.2)       
 
 **Question 4:** This is a written question. Please leave your response in the document under Question 4.          
 
 **Question 5:**   
 
-- BKN Defensive eFG%: XX.X%   
-- When opponent on a B2B: XX.X%    
+- BKN Defensive eFG%: 53.5%   
+- When opponent on a B2B: 54.3%    
 
 ## Part 2  
 
@@ -80,7 +80,7 @@ Please show your work in the document, you don't need anything here.
 
 ## Part 3    
  
-**Question 8:**    
+**Question 9:**    
 
 - Most Helped by Schedule: TEAM1 (XX.X wins)     
 - Most Hurt by Schedule: TEAM2 (XX.X wins)     
@@ -114,35 +114,63 @@ summary(draft_schedule)
 str(draft_schedule)
 ```
 
-```{r}
+```{r, fig.width = 8, fig.height = 5}
 # Algorithm to calculate if 4th game is played within 6 nights
+library(dplyr)
+library(ggplot2)
 
 # Filter out OKC rows from the dataset and sort by gamedate
-OKC_Rows <- filter(draft_schedule, team == "OKC") %>% arrange(gamedate)
+okc_rows <- filter(draft_schedule, team == "OKC") %>% arrange(gamedate)
 
 # Calculate days between every fourth game
-daysBetweenFourthGame <- sapply(1:(nrow(OKC_Rows) - 3), function(i) {
-    date1 <- as.Date(OKC_Rows$gamedate[i])
-    date4 <- as.Date(OKC_Rows$gamedate[i + 3])
-    return(as.numeric(date4 - date1))
+days_between_fourth_game <- sapply(1:(nrow(okc_rows) - 3), function(i) {
+  date1 <- as.Date(okc_rows$gamedate[i])
+  date4 <- as.Date(okc_rows$gamedate[i + 3])
+  return(as.numeric(date4 - date1))
 })
 
-newOKCRows <- tibble(
-  season = head(OKC_Rows$season, -3),
-  gamedate = head(OKC_Rows$gamedate, -3),
-  team = head(OKC_Rows$team, -3),
-  daysBetweenFourGames = daysBetweenFourthGame
-)
-
 # Get total number of fourth games that occur within 6 nights
-gamesCount <- sum(daysBetweenFourthGame <= 5)
+four_in_six_stretch_count <- sum(days_between_fourth_game <= 5)
 
-cat("OKC had", gamesCount, "4-in-6 stretches in the 2024-25 season schedule")
+# Represent if a four game stretch is a 4-in-6 or not
+okc_rows$is4in6Stretch <- 0
+okc_rows$is4in6Stretch[1:(length(days_between_fourth_game))] <- days_between_fourth_game <= 5
+
+# Visualise the distribution comparing Win Rate between 4-in-6 Stretches and Non 4-in-6 Stretches
+okc_rows %>%
+  group_by(is4in6Stretch) %>%
+  summarise(winRate = mean(win), games = n()) %>%
+  mutate(stretchLabel = ifelse(is4in6Stretch == 1, "4-in-6 Stretch", "Non 4-in-6 Stretch")) %>%
+  ggplot(aes(x = stretchLabel, y = winRate)) +
+  geom_col(aes(fill = stretchLabel),
+           width = 0.2,
+           show.legend = FALSE) +
+  scale_fill_manual(values = c(
+    "4-in-6 Stretch" = "#E63946",
+    "Non 4-in-6 Stretch" = "#2A9D8F"
+  )) +
+  geom_text(aes(label = paste0(
+    scales::percent(winRate, accuracy = 0.1), "\n(", games, " games)"
+  )), vjust = -0.5, size = 4) +
+  labs(
+    title = "OKC Win Rate During 4-in-6 Stretches vs Non 4-in-6 Stretches",
+    subtitle = "Analyzing performance impact during tighter schedules",
+    x = "Game Type",
+    y = "Win Rate"
+  ) + coord_cartesian(ylim = c(0, 1)) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 12, face = "italic"),
+    axis.text.x = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    plot.margin = margin(10, 10, 10, 10)
+  )
 ```
 
 <span style="color:red">**ANSWER 1:**</span>  
 
-57 4-in-6 stretches in OKC's draft schedule.   
+26 4-in-6 stretches in OKC's draft schedule.   
 
 ### Question 2     
 
@@ -157,7 +185,7 @@ summary(schedule)
 str(schedule)
 ```
 
-```{r}
+```{r, fig.width = 8, fig.height = 6}
 library(purrr)
 
 # Group by team and season
@@ -165,64 +193,158 @@ sorted_schedule <- arrange(schedule, gamedate) %>%
   group_by(team, season) %>%
   group_split()
 
-# Count total games per team-season
-game_counts <- arrange(schedule, gamedate) %>%
-  group_by(team, season) %>%
-  summarise(total_games = n(), .groups = "drop")
+# Count total games per team in each season
+game_counts <- schedule %>%
+  arrange(gamedate) %>%
+  count(team, season, name = "totalGames")
 
-# Apply your logic to each group
-eachTeamAndSeason <- map(sorted_schedule, function(df) {
-
-  # Calculate days between game i and game i+3
-  days <- sapply(1:(nrow(df) - 3), function(i) {
-    date1 <- as.Date(df$gamedate[i])
-    date4 <- as.Date(df$gamedate[i + 3])
+# Calculate days between every fourth game per team in each season
+team_per_season <- map(sorted_schedule, function(each_team_season) {
+  days <- sapply(1:(nrow(each_team_season) - 3), function(i) {
+    date1 <- as.Date(each_team_season$gamedate[i])
+    date4 <- as.Date(each_team_season$gamedate[i + 3])
     as.numeric(date4 - date1)
   })
-
-  # Return a data frame with team, season, and the result
+  
+  # Select each team and the corresponding season from the result
   tibble(
-    team = unique(df$team),
-    season = unique(df$season),
-    daysBetweenFourthGameLargerSchedule = days
+    team = unique(each_team_season$team),
+    season = unique(each_team_season$season),
+    daysBetweenFourthGame = days
   )
 })
 
-# Combine all results into one data frame
-final_result <- bind_rows(eachTeamAndSeason)
+# Combine all teams per season into a data frame
+all_teams_per_season <- bind_rows(team_per_season)
 
-# Count 4-in-6 stretches per team-season
-stretch_counts <- final_result %>%
-  filter(daysBetweenFourthGameLargerSchedule <= 6) %>%
-  count(team, season, name = "four_in_six_count")
+# Total number of 4-in-6 stretches per team for each season
+stretch_counts <- all_teams_per_season %>%
+  filter(daysBetweenFourthGame <= 5) %>%
+  count(team, season, name = "totalFourInSixStretches")
 
-# Merge and normalize
-normalized_stretches <- stretch_counts %>%
+# Total number of 4-in-6 stretches per team for each season adjusted to 82 games per season
+adjusted_stretches_per_season <- stretch_counts %>%
   left_join(game_counts, by = c("team", "season")) %>%
-  mutate(
-    normalized_count = round((four_in_six_count / total_games) * 82, 2)
-  )
+  mutate(adjustedtotalFourInSixStretches = round((totalFourInSixStretches / totalGames) * 82, 2))
 
-# Get total number of fourth games that occur within 6 nights
-gamesCountLargerSchedule <- mean(normalized_stretches$normalized_count)
+# Calculate average 4-in-6 stretches for a team in a season adjusted to 82 games per season
+four_in_six_stretch_count_larger_schedule <- round(mean(
+  adjusted_stretches_per_season$adjustedtotalFourInSixStretches
+),
+1)
+
+# Calculate average 4-in-6 stretches for each season adjusted to 82 games per season
+season_adjusted_stretches_averages <- adjusted_stretches_per_season %>%
+  group_by(season) %>%
+  summarise(averageAdjustedStretches = mean(adjustedtotalFourInSixStretches))
+
+# Visualise the distribution to display average 4-in-6 stretches for each season adjusted to 82 games per season
+ggplot(season_adjusted_stretches_averages,
+       aes(x = factor(season + 1), y = averageAdjustedStretches)) +
+  geom_col(fill = "#2C3E50", show.legend = FALSE) +
+  geom_text(
+    aes(label = round(averageAdjustedStretches, 1)),
+    vjust = -0.5,
+    size = 3.5,
+    color = "black"
+  ) +
+  geom_hline(
+    yintercept = four_in_six_stretch_count_larger_schedule,
+    linetype = "dashed",
+    color = "red",
+    linewidth = 1
+  ) +
+  labs(
+    title = "Average Adjusted 4-in-6 Stretches per Season",
+    subtitle = paste(
+      "Dashed red line = Overall league average between 2014-15 and 2023-24 (",
+      four_in_six_stretch_count_larger_schedule,
+      ")",
+      sep = ""
+    ),
+    x = "Season",
+    y = "Average Stretch Count"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.major.y = element_line(color = "gray80", linetype = "dotted"),
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(
+      color = "gray30",
+      size = 12,
+      face = "italic"
+    ),
+    axis.text.x = element_text(
+      size = 10,
+      angle = 45,
+      hjust = 1
+    ),
+    axis.text.y = element_text(size = 10),
+    plot.margin = margin(10, 10, 10, 10)
+  )
 ```
 <span style="color:red">**ANSWER 2:**</span>  
 
-52.8 4-in-6 stretches on average.  
+25.1 4-in-6 stretches on average.  
 
 ### Question 3  
 
 **QUESTION:** Which of the 30 NBA teams has had the highest average number of 4-in-6 stretches between 2014-15 and 2023-24? Which team has had the lowest average? Adjust each team/season to per-82 games.     
 
 
-```{r}
+```{r, fig.width = 10, fig.height = 9}
+# Calculate average 4-in-6 stretches for each team between 2014-15 and 2023-24 adjusted to 82 games per season
+each_team_adjusted_stretches_average <- adjusted_stretches_per_season %>%
+  group_by(team) %>%
+  summarise(averageStretch = round(mean(adjustedtotalFourInSixStretches), 1))
 
+# Visualise the distribution as an Horizontal Bar Chart
+each_team_adjusted_stretches_average %>%
+  mutate(
+    highlight = case_when(
+      averageStretch == max(averageStretch) ~ "Most",
+      averageStretch == min(averageStretch) ~ "Least",
+      TRUE ~ "Other"
+    ),
+    highlight = factor(highlight, levels = c("Most", "Least", "Other"))
+  ) %>%
+  ggplot(aes(
+    x = reorder(team, averageStretch),
+    y = averageStretch,
+    fill = highlight
+  )) +
+  geom_col() +
+  scale_fill_manual(values = c(
+    "Most" = "#E63946",
+    "Least" = "#2A9D8F",
+    "Other" = "#EFC000FF"
+  )) + geom_text(aes(label = round(averageStretch, 1)), hjust = -0.2, size = 4) +
+  labs(
+    title = "Average 4-in-6 Stretches by NBA Teams between 2014-15 and 2023-24",
+    x = "Team",
+    y = "Average Stretch Count",
+    fill = "Highlight         ",
+    subtitle = "Highlighting teams with the most and least average 4-in-6 stretches",
+    caption = "Final results have been adjusted to 82 games per season"
+  ) +
+  coord_flip() +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 12, face = "italic"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.position = "top",
+    plot.caption.position =  "plot",
+    plot.caption = element_text(hjust = 0, size = 10, face = "italic"),
+    plot.margin = margin(10, 10, 10, 10)
+  )
 ```
 
 <span style="color:red">**ANSWER 3:**</span>  
 
-- Most 4-in-6 stretches on average: TEAM1 (XX.X)     
-- Fewest 4-in-6 stretches on average: TEAM2 (XX.X)        
+- Most 4-in-6 stretches on average: CHA (28.1)     
+- Fewest 4-in-6 stretches on average: NYK (22.2)        
 
 
 ### Question 4  
@@ -236,10 +358,97 @@ gamesCountLargerSchedule <- mean(normalized_stretches$normalized_count)
 
 **QUESTION:** What was BKN's defensive eFG% in the 2023-24 season? What was their defensive eFG% that season in situations where their opponent was on the second night of back-to-back?  
 
+```{r}
+library(DataExplorer)
+
+# View Game Data column names and quick overview of key statistical measures
+summary(game_data)
+
+# Summary of Game Data column data structure and a few sample rows
+str(game_data)
+
+# Plot of Game Data column, describing the nature of all columns and checking if there any missing rows. This step is taken to confirm that there are no missing rows as Game Data is a very large dataset
+plot_intro(game_data)
+```
+
+```{r}
+# Algorithm to calculate defensive eFG% on the second night of a B2B
+
+# Filter out games that occur on the second night of a B2B
+game_data_sorted <- game_data %>%
+  arrange(gamedate) %>%
+  group_by(off_team) %>%
+  mutate(
+    previousGameDate = lag(gamedate),
+    isB2B = !is.na(previousGameDate) &
+      gamedate - previousGameDate == 1
+  )
+
+# Filter out BKN rows in 2023–24 from the dataset and sort by gamedate
+bkn_rows <- filter(game_data_sorted, def_team == "BKN" &
+                     season == "2023") %>% arrange(gamedate)
+
+# Get the total Field Goals Made, 3 Points Made and Field Goals Attempted against BKN in 2023-24
+total_fgmade <- sum(bkn_rows$fgmade)
+total_fg3made <- sum(bkn_rows$fg3made)
+total_fgattempted <- sum(bkn_rows$fgattempted)
+
+# Calculate Defensive eFG% for BKN in 2023-24
+defensive_eFG <- (total_fgmade + 0.5 * total_fg3made) / total_fgattempted * 100
+
+# Get the total Field Goals Made, 3 Points Made and Field Goals Attempted against BKN in 2023-24 on the second night of a back-to-back
+B2B_fgmade <- sum(bkn_rows$fgmade[bkn_rows$isB2B])
+B2B_fg3made <- sum(bkn_rows$fg3made[bkn_rows$isB2B])
+B2B_fgattempted <- sum(bkn_rows$fgattempted[bkn_rows$isB2B])
+
+# Calculate Defensive eFG% for BKN in 2023-24 on the second night of a back-to-back
+B2B_defensive_eFG <- (B2B_fgmade + 0.5 * B2B_fg3made) / B2B_fgattempted * 100
+
+# Visualise the distribution comparing Defensive EFG% between back-to-back and non back-to-back games
+ggplot(
+  tibble::tibble(
+    B2BLabel = c("Back-to-Back Games", "Non Back-to-Back Games"),
+    defensive_eFG = c(B2B_defensive_eFG, defensive_eFG),
+    games = c(sum(bkn_rows$isB2B), sum(!bkn_rows$isB2B))
+  ),
+  aes(x = B2BLabel, y = defensive_eFG)
+) +
+  geom_col(aes(fill = B2BLabel), width = 0.2, show.legend = FALSE) +
+  scale_fill_manual(values = c(
+    "Back-to-Back Games" = "#E63946",
+    "Non Back-to-Back Games" = "#2A9D8F"
+  )) +
+  geom_text(aes(label = paste0(
+    scales::percent(defensive_eFG / 100, accuracy = 0.1),
+    "\n(",
+    games,
+    " games)"
+  )), vjust = -0.5, size = 4) +
+  labs(
+    title = "BKN Defensive EFG% \nDuring Back-to-Back Games vs Non Back-to-Back Games",
+    subtitle = "Analyzing defensive efficiency during back-to-back games",
+    x = "Game Type",
+    y = "Defensive EFG%"
+  ) +
+  coord_cartesian(ylim = c(0, 100)) +
+  scale_y_continuous(
+    labels = function(x)
+      paste0(x, "%")
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 12, face = "italic"),
+    axis.text.x = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+```
+
 <span style="color:red">**ANSWER 5:**</span>    
 
-- BKN Defensive eFG%: XX.X%   
-- When opponent on a B2B: XX.X%    
+- BKN Defensive eFG%: 53.5%   
+- When opponent on a B2B: 54.3%    
 
 ## Part 2 -- Trends and Visualizations                   
 
@@ -255,7 +464,139 @@ This is an intentionally open ended section, and there are multiple approaches y
 <span style="color:red">**ANSWER 6:**</span>    
 
 ```{r}
+library(lubridate)
+# Trend 1: Number of Weekly Games per Season
 
+# Extract the week number in year and the year from the schedule dataset
+weeks_and_year_schedule <- schedule %>%
+  mutate(week = isoweek(gamedate), year = year(gamedate))
+
+# Calculate the average Games per Week for each season adjusted to 82 games per season
+average_weekly_games <- weeks_and_year_schedule %>%
+  group_by(season, team, year, week) %>%
+  summarise(games = n(), .groups = "drop") %>%
+  group_by(season, team) %>%
+  summarise(
+    average_weekly = mean(games),
+    total_games = sum(games),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    adjustment_value = 82 / total_games,
+    adjusted_weekly = average_weekly * adjustment_value
+  ) %>%
+  group_by(season) %>%
+  summarise(averageGamesPerWeek = mean(adjusted_weekly)) %>%
+  mutate(season = season + 1,
+         season = factor(season, levels = unique(season)))
+
+# Visualise the distribution to display average Games per week for each season adjusted to 82 games per season
+ggplot(average_weekly_games, aes(x = season, y = averageGamesPerWeek)) +
+  geom_line(group = 1,
+            color = "#d95f0e",
+            linewidth = 1.2) +
+  geom_point(color = "#d95f0e", size = 2) +
+  labs(
+    title = "Average Games per Week by Season",
+    subtitle = "To show how scheduling has impacted on games per week since 2014-15",
+    caption = "Final results have been adjusted to 82 games per season",
+    x = "Season",
+    y = "Games per Week"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.major.y = element_line(color = "gray80", linetype = "dotted"),
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(
+      color = "gray30",
+      size = 12,
+      face = "italic"
+    ),
+    axis.text.x = element_text(
+      size = 10,
+      angle = 45,
+      hjust = 1
+    ),
+    axis.text.y = element_text(size = 10),
+    plot.caption.position =  "plot",
+    plot.caption = element_text(hjust = 0, size = 10, face = "italic"),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+```
+
+```{r}
+# Trend 2: Amount of Rest Days between games per Season
+
+# Calculate the Rest Days between games adjusted to 82 games per season
+rest_days_schedule <- schedule %>%
+  arrange(team, season, gamedate) %>%
+  group_by(team, season) %>%
+  mutate(
+    daysBetweenGames = as.numeric(gamedate - lag(gamedate)),
+    total_games = n(),
+    adjustment_value = 82 / total_games,
+    adjusted_rest_days = daysBetweenGames * adjustment_value
+  ) %>%
+  mutate(season = season + 1,
+         season = factor(season, levels = unique(season))) %>%
+  ungroup()
+
+# Calculate the average Rest Days between games for each season adjusted to 82 games per season
+average_rest_by_season <- rest_days_schedule %>%
+  group_by(season) %>%
+  summarise(average_rest_days = mean(adjusted_rest_days, na.rm = TRUE))
+
+# Calculate the average Rest Days between games for all seasons between 2014-15 and 2023-24
+overall_average_rest_days <- mean(average_rest_by_season$average_rest_days, na.rm = TRUE)
+
+# Visualise the distribution to display average Rest Days between games for each season adjusted to 82 with average rest for all seasons combined highlighted
+ggplot(average_rest_by_season,
+       aes(x = season, y = average_rest_days, group = 1)) +
+  geom_line(color = "#0077b6", size = 1.2) +
+  geom_point(color = "#0077b6", size = 3) +
+  geom_hline(yintercept = overall_average_rest_days,
+             linetype = "dashed",
+             color = "red") +
+  annotate(
+    "text",
+    x = Inf,
+    y = overall_average_rest_days,
+    label = paste(
+      "Overall Average:",
+      round(overall_average_rest_days, 2),
+      "days"
+    ),
+    hjust = 1.1,
+    vjust = -0.5,
+    color = "red",
+    size = 4
+  ) +
+  labs(
+    title = "Average Rest Days Between Games by Season",
+    subtitle = "To show how scheduling has impacted on rest days between games since 2014-15",
+    caption = "Final results have been adjusted to 82 games per season",
+    x = "Season",
+    y = "Average Rest Days"
+  ) +
+  coord_cartesian(ylim = c(2, 5)) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(
+      color = "gray30",
+      size = 12,
+      face = "italic"
+    ),
+    axis.text.x = element_text(
+      size = 10,
+      angle = 45,
+      hjust = 1
+    ),
+    axis.text.y = element_text(size = 10),
+    plot.caption.position =  "plot",
+    plot.caption = element_text(hjust = 0, size = 10, face = "italic"),
+    plot.margin = margin(10, 10, 10, 10)
+  )
 ```
 
 
@@ -265,7 +606,143 @@ This is an intentionally open ended section, and there are multiple approaches y
 
 Please use this tool to plot OKC and DEN's provided 80-game 2024-25 schedules.   
 
-<span style="color:red">**ANSWER 7:**</span>    
+<span style="color:red">**ANSWER 7:**</span>  
+
+
+```{r}
+library(geosphere)
+library(plotly)
+library(dplyr)
+
+# Define the plotting function
+plot_team_schedule <- function(schedule, locations, team_name) {
+  # Merge location data for team and opponent
+  combined_schedule_location <- draft_schedule %>%
+    filter(team == team_name) %>%
+    arrange(gamedate) %>%
+    left_join(locations, by = "team") %>%
+    rename(
+      team_latitude = latitude,
+      team_longitude = longitude,
+      team_timezone = timezone
+    ) %>%
+    left_join(locations, by = c("opponent" = "team")) %>%
+    rename(
+      opposition_latitude = latitude,
+      opposition_longitude = longitude,
+      opposition_timezone = timezone
+    )
+  
+  # Calculate travel distance and time zone changes
+  combined_schedule_location <- combined_schedule_location %>%
+    arrange(gamedate) %>%
+    mutate(
+      current_latitude = ifelse(home, team_latitude, opposition_latitude),
+      current_longitude = ifelse(home, team_longitude, opposition_longitude),
+      previous_latitude = lag(current_latitude),
+      previous_longitude = lag(current_longitude),
+      travel_km = distHaversine(
+        cbind(previous_longitude, previous_latitude),
+        cbind(current_longitude, current_latitude)
+      ),
+      timezone_change = team_timezone != lag(team_timezone),
+      long_trip = travel_km > 1000,
+      location = ifelse(home, "Home", "Away"),
+      result = ifelse(win, "Win", "Loss"),
+      color = case_when(
+        home & win ~ "green",
+        home & !win ~ "blue",
+        !home & win ~ "lightgreen",
+        TRUE ~ "red"
+      )
+    )
+  
+  ## --- Plot 1: Interactive Timeline ---
+  # Add flags for conditions
+  combined_schedule_location <- combined_schedule_location %>%
+    arrange(gamedate) %>%
+    mutate(
+      location_num = ifelse(location == "Home", 1, 0),
+      long_trip = travel_km > 1000,
+      b2b_game = gamedate - lag(gamedate) == 1,
+      rest_day = gamedate - lag(gamedate) >= 2,
+      marker_symbol = case_when(
+        long_trip ~ "diamond",
+        b2b_game ~ "triangle-up",
+        timezone_change ~ "square",
+        rest_day ~ "star",
+        TRUE ~ "circle"
+      ),
+      marker_size = case_when(
+        long_trip ~ 14,
+        b2b_game ~ 12,
+        timezone_change ~ 10,
+        rest_day ~ 12,
+        TRUE ~ 8
+      )
+    )
+  
+  # Create the plot
+  timeline_plot <- plot_ly(
+    data = combined_schedule_location,
+    x = ~ gamedate,
+    y = ~ location_num,
+    type = 'scatter',
+    mode = 'markers',
+    marker = list(
+      color = ~ color,
+      size = ~ marker_size,
+      symbol = ~ marker_symbol,
+      line = list(width = 1, color = "black")
+    ),
+    text = ~ paste(
+      "Opponent:",
+      opponent,
+      "<br>Date:",
+      gamedate,
+      "<br>Location:",
+      location,
+      "<br>Result:",
+      result,
+      "<br>Travel (km):",
+      round(travel_km, 1),
+      "<br>Time Zone Change:",
+      timezone_change,
+      "<br>Back-to-Back:",
+      ifelse(b2b_game, "Yes", "No"),
+      "<br>Rest Day:",
+      ifelse(rest_day, "Yes", "No"),
+      "<br>Long Trip:",
+      ifelse(long_trip, "Yes", "No")
+    ),
+    hoverinfo = 'text',
+    height = 350
+  ) %>%
+    layout(
+      title = paste("Season Timeline for", team_name),
+      xaxis = list(title = "Date"),
+      yaxis = list(
+        title = "Game Location",
+        tickvals = c(0, 1),
+        ticktext = c("Away", "Home"),
+        range = c(-0.2, 1.2)
+      )
+    )
+  
+  # Return both plots
+  list(timeline = timeline_plot)
+}
+
+# Example usage:
+# Assuming you have draft_schedule and locations loaded
+okc_plots <- plot_team_schedule(draft_schedule, locations, "OKC")
+den_plots <- plot_team_schedule(draft_schedule, locations, "DEN")
+
+# To view the plots:
+okc_plots$timeline
+den_plots$timeline
+```
+
 
 ### Question 8    
 
